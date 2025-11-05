@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- D3.js is a JavaScript library for producing dynamic, interactive data visualizations in web browsers. -->
+    <script src="//d3js.org/d3.v6.min.js"></script>
+    <!-- D3-hexjson is a D3.js plugin for rendering hexagonal layouts -->
+    <script src="//unpkg.com/d3-hexjson"></script>
+    <title>Wales Senedd Constituency and Electoral Region Hexmap</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- two divs for two maps -->
+    <div id='sc_map'></div>
+    <div id="scm_map"></div>
+    <div id="info"><h1>This is <span id="sc_name"></span></h1></div>
+
+    <script>
+
+        // details of the parties 
+        let party_details = {
+            'Labour': { name: 'Labour', colour: '#' },
+            'Conservative': { name: 'Conservative', colour: '#' },
+            'Green': { name: 'Green Party', colour: '#' },
+            'Liberal Democrats': { name: 'Liberal Democrats', colour: '#' },
+            'Plaid Cymru': { name: 'Plaid Cymru', colour: '#' },
+            'Independent': { name: 'Independent', colour: '#' },
+            'Reform UK': { name: 'Reform UK', colour: '#' }
+        }
+
+        // set the size for the visualisation
+        let width = d3.select('#sc_map').node().clientWidth;
+        let height = 600;
+
+        // give it some breathing room around the edges
+        let margin = {
+            top: 30,
+            bottom: 30,
+            left: 30,
+            right: 30
+        }
+
+        // create SVG elements to hold the maps
+        let sc_svg = d3.select('#sc_map').append('svg').attr("width", width).attr('height', height);
+        let scer_svg = d3.select('#scm_map').append('svg').attr("width", width).attr('height', height);
+
+        // track which element is currently active (clicked on)
+        let active = d3.select(null);
+
+        // function to reset the map view
+        function reset(event, d) {
+            active.attr('opacity', '1.0');
+            active = d3.select(null);
+
+            d3.select('#info')
+                .classed('active', false);
+        }
+
+        // function to handle clicks on map elements
+        function clicked(event, d) {
+            console.log(d);
+            if(active.node() === this) {
+                reset(event, d);
+            } else {
+                active.attr('opacity', '1.0')
+                active = d3.select(this);
+                active.attr('opacity', '0.2')
+                d3.select("#info")
+                        .classed("active", true);
+                if (d.English_Na) {
+                    d3.select('#sc_name').text(d.English_Na);
+                }
+            }
+        }
+
+        // load the HexJSON data and create the maps
+        Promise.all([
+            // the hexjson with one hex per constituency
+            d3.json('data/senedd_2026.hexjson'),
+            // the hexjson with six hexes per constituency
+            d3.json('data/senedd_2026_multiple.hexjson'),
+            // the election results data
+            d3.csv('data/senedd_results.csv')
+        ]).then(([sc_hexes, sc_hexes_multiple, sc_data]) => {
+
+            // function to get the colour for a hex based on the party of the MS it represents
+            function getColour(hex, index){
+
+                // find the election result data for this hex and segment
+                let sc_info = sc_data.find(d => d.id === `${hex.No_Rhif}_${index}`);
+                if(sc_info) {
+                    let party = party_details[sc_info.Party];
+
+                    // send back the party colour if we have it
+
+                } else {
+                    return 'purple';
+                }
+            }
+
+            // renderHexJSON takes the hexjson data and converts it into a format suitable for rendering with D3.js
+            sc_hexes_rendered = d3.renderHexJSON(sc_hexes, width-margin.left-margin.right, height-margin.top-margin.bottom);
+
+            // create the constituency hexmap
+            let sc_hexmap = sc_svg.selectAll('g')
+                .data(sc_hexes_rendered)
+                .join((enter) => {
+                    // position each hexagon correctly
+                    let g = enter.append('g')
+                        .attr('transform', (hex) => `translate(${hex.x+margin.left},${hex.y+margin.top})`);
+
+                    // draw a hexagon for each constituency
+                    g.append('polygon')
+                        .attr('points', (hex) => hex.points)
+                        .attr('stroke', '#fff')
+                        .attr('fill', '#ccc')
+                        .attr('stroke-width', 10)
+                        .attr('id', (hex) => hex.key)
+                        .attr('data-name', (hex) => hex.name)
+                        .on('click', clicked);
+
+                    // draw six triangles within each hexagon to represent the six members
+                    for(let i=1; i<=6; i++ ){
+                        g.append('polygon')
+                            .attr('points', (hex) => `0,0 ${hex.vertices[i-1].x},${hex.vertices[i-1].y} ${hex.vertices[i < 6 ? i : 0].x},${hex.vertices[i <  6 ? i : 0].y}`)
+                            .attr('fill', (hex) => getColour(hex, i))
+                            .attr('stroke', '#eee')
+                            .attr('stroke-width', 0.5)
+                            .on('click', clicked);
+                    }
+                });
+
+            // create the electoral region hexmap
+            sc_hexes_multiple_rendered = d3.renderHexJSON(sc_hexes_multiple, width-margin.left-margin.right, height-margin.top-margin.bottom);
+            
+            let scer_hexmap = scer_svg.selectAll('g')
+                .data(sc_hexes_multiple_rendered)
+                .join((enter) => {
+                    enter.append('g')
+                        .attr('transform', (hex) => `translate(${hex.x+margin.left},${hex.y+margin.top})`)
+                        // draw a hexagon for each member
+                        .append('polygon')
+                        .attr('points', (hex) => hex.points)
+                        .attr('stroke', '#eee')
+                        // add a fill color based on the segment
+                        .attr('fill', (hex) => getColour(hex, hex.Segment))
+                        .attr('stroke-width', 1)
+                        .attr('id', (hex) => hex.key)
+                        .attr('data-name', (hex) => hex.name)
+                        .on('click', clicked);
+                });
+
+            // draw constituency boundaries on top of the electoral region hexmap
+            sc_boundaries = d3.getBoundarySegmentsForHexJSON(sc_hexes_multiple, width-margin.left-margin.right, height-margin.top-margin.bottom, "English_Na");
+            let boundaries = scer_svg.selectAll('line')
+                .data(sc_boundaries)
+                .join((enter) => {
+                    enter.append('line')
+                        .attr('x1', (boundary) => boundary.x1+margin.left)
+                        .attr('y1', (boundary) => boundary.y1+margin.top)
+                        .attr('x2', (boundary) => boundary.x2+margin.left)
+                        .attr('y2', (boundary) => boundary.y2+margin.top)
+                        .attr('fill', 'none')
+                        .attr('stroke', '#fff')
+                        .attr('stroke-width', 4)
+                });
+            });
+
+    </script>
+
+</body>
+</html>

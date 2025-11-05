@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- D3.js is a JavaScript library for producing dynamic, interactive data visualizations in web browsers. -->
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <!-- TopoJSON is a data format for geographic data that simplifies GeoJSON, making it easier to work with in web applications. -->
+    <script src="//unpkg.com/topojson@3"></script>
+    <title>Wales Senedd Constituency and Electoral Region Boundaries</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id='sc_map'></div>
+    <div id="info"><h1>This is <span id="sc_name"></span></h1></div>  
+    <script>
+
+        // set the size for the visualisation
+        let width = d3.select('#sc_map').node().clientWidth;
+        let height = 600;
+
+        // create an SVG element to hold the map
+        let sc_svg = d3.select('#sc_map').append('svg').attr("width",width).attr('height', height);
+
+        // projections convert from geographic coordinates (latitude and longitude) on a 3D sphere to 2D coordinates on the screen.
+        let projection = d3.geoMercator();
+
+        // path generator converts GeoJSON data into SVG path data.
+        let path = d3.geoPath().projection(projection);
+
+        // track which element is currently active (clicked on)
+        let active = d3.select(null);
+
+        // function to reset the map view
+        function reset(event, d) {
+            active.attr('opacity', '1.0');
+            active = d3.select(null);
+
+            d3.select('#info')
+                .classed('active', false);
+
+        }
+
+        // function to handle clicks on map elements
+        function clicked(event, d) {
+            if(active.node() === this) {
+                reset(event, d);
+            } else {
+                active.attr('opacity', '1.0')
+                active = d3.select(this);
+                active.attr('opacity', '0.2')
+                d3.select("#info")
+                        .classed("active", true);
+                if(d.properties.English_Na) {
+                    d3.select('#sc_name').text(d.properties.English_Na);
+                }
+            }
+        }
+
+        // load the TopoJSON data and create the map
+        Promise.all([
+            d3.json('data/senedd_2026.topojson'),
+        ]).then(([sc_boundaries]) => {
+
+            // extract the features from the TopoJSON data
+            let sc = topojson.feature(sc_boundaries, sc_boundaries.objects.senedd_2026);
+
+            // fit the projection to the size of the SVG element
+            projection.fitSize([width, height], sc);
+
+            // create the map by binding the data to SVG path elements
+            sc_svg.selectAll('path')
+                .data(sc.features)
+                .join((enter) => {
+                    enter.append('path')
+                    .attr('d', path)
+                    // colour and style the map elements
+                    .attr('fill', '#eee' )
+                    .attr('stroke', '#111')
+                    .attr('stroke-width', '1px')
+                    .on('click', clicked);
+                });
+        });
+
+    </script>
+
+</body>
+</html>

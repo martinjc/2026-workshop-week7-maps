@@ -1,0 +1,33 @@
+html,
+body {
+    margin: 0px;
+    padding: 0px;
+
+    height: 100%;
+    width: 80%;
+    margin: auto;
+
+    background-color: #ddd;
+
+    position: relative;
+
+    font-family: "Open Sans", sans-serif;
+}
+
+img {
+    max-width: 70%;
+}
+
+#sc_map, #scm_map {
+    display: block;
+    width: 45%;
+    float: left;
+}
+#info {
+    clear: both;
+    visibility: hidden;
+    padding: 30px;
+}
+#info.active {
+    visibility: visible;
+}
